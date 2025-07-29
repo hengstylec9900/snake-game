@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>恆隆王貪食蛇遊戲 v9</title>
+<style>
+  body {
+    margin: 0;
+    background: #000033;
+    color: #fff;
+    font-family: sans-serif;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    margin: 0 auto;
+    touch-action: none;
+  }
+  #score {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 20px;
+  }
+  #controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: grid;
+    grid-template-columns: 80px 80px 80px;
+    grid-template-rows: 80px 80px;
+    gap: 10px;
+    justify-items: center;
+  }
+  .btn {
+    background: rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 8px;
+    font-size: 28px;
+    color: #fff;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn:active { background: rgba(255,255,255,0.5); }
+
+  #pauseBtn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 8px;
+    font-size: 40px;
+    color: #fff;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #pauseBtn:active { background: rgba(255,255,255,0.5); }
+
+  #startOverlay, #pauseOverlay {
+    position: absolute;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 24px;
+  }
+  #startOverlay button, #pauseOverlay button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 20px;
+  }
+
+  /* 過關提示動畫 */
+  #levelNotice {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-size: 48px;
+    color: #fff;
+    opacity: 0;
+    pointer-events: none;
+  }
+  @keyframes levelUpAnim {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    60%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="score">分數：0</div>
+
+<div id="controls">
+  <div></div>
+  <button class="btn" onclick="changeDirection('UP')">↑</button>
+  <div></div>
+  <button class="btn" onclick="changeDirection('LEFT')">←</button>
+  <button class="btn" onclick="changeDirection('DOWN')">↓</button>
+  <button class="btn" onclick="changeDirection('RIGHT')">→</button>
+</div>
+
+<button id="pauseBtn" onclick="togglePause()">⏸️</button>
+
+<div id="startOverlay" style="display:flex;">
+  <div>恆隆王貪食蛇遊戲</div>
+  <button onclick="startGame()">開始遊戲</button>
+</div>
+
+<div id="pauseOverlay">
+  <div>暫停遊戲中</div>
+  <button onclick="resumeGame()">繼續</button>
+</div>
+
+<!-- 過關提示 -->
+<div id="levelNotice">下一關！</div>
+
+<!-- 音效 -->
+<audio id="eatSound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg"></audio>
+<audio id="levelUpSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="gameOverSound" src="https://actions.google.com/sounds/v1/cartoon/concussive_hit_guitar_boing.ogg"></audio>
+<audio id="meteorSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const box = 30;
+let snake = [{ x: 5*box, y: 5*box }];
+let direction;
+let score = 0;
+let speed = 250;
+let foodStage = 0;
+const foods = ["🍄","🌽","🍞","🍖","🍤","🥩","🥓","🍣","🍗","🍔"];
+const rainbowColors = ["#FF0000","#FF7F00","#FFFF00","#00FF00","#0000FF","#4B0082","#8B00FF"];
+
+function currentFoodEmoji(){ return foods[foodStage]; }
+
+let food = randomFood();
+
+function randomFood(){
+  return {
+    x: Math.floor(Math.random()*((canvas.width-3*box)/box))*box + box,
+    y: Math.floor(Math.random()*((canvas.height-3*box)/box))*box + box
+  };
+}
+
+document.addEventListener("keydown", e=>{
+  if(e.key==="ArrowLeft" && direction!=="RIGHT") direction="LEFT";
+  else if(e.key==="ArrowUp" && direction!=="DOWN") direction="UP";
+  else if(e.key==="ArrowRight" && direction!=="LEFT") direction="RIGHT";
+  else if(e.key==="ArrowDown" && direction!=="UP") direction="DOWN";
+});
+
+function changeDirection(dir){
+  if(dir==="LEFT" && direction!=="RIGHT") direction="LEFT";
+  else if(dir==="UP" && direction!=="DOWN") direction="UP";
+  else if(dir==="RIGHT" && direction!=="LEFT") direction="RIGHT";
+  else if(dir==="DOWN" && direction!=="UP") direction="DOWN";
+}
+
+function collision(head, array){
+  for(let i=0;i<array.length;i++){
+    if(head.x===array[i].x && head.y===array[i].y) return true;
+  }
+  return false;
+}
+
+let scaleAnim = 1;
+let growing = true;
+
+// 星星 + 流星 + 小行星
+let meteors = [];
+let asteroids = [];
+
+for (let i = 0; i < 3; i++) {
+  asteroids.push({
+    x: Math.random()*window.innerWidth,
+    y: Math.random()*window.innerHeight,
+    radius: 10 + Math.random()*10,
+    dx: (Math.random()-0.5)*1,
+    dy: (Math.random()-0.5)*1
+  });
+}
+
+const meteorColors = ["#fff", "#ff66cc", "#66ccff", "#ffff66", "#ff9933", "#cc66ff"];
+
+function drawBackground(){
+  ctx.fillStyle = "#000033";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "#fff";
+  for(let i=0;i<50;i++){
+    ctx.fillRect(Math.random()*canvas.width, Math.random()*canvas.height, 2, 2);
+  }
+  ctx.fillStyle = "#888";
+  for (let a of asteroids){
+    ctx.beginPath();
+    ctx.arc(a.x,a.y,a.radius,0,Math.PI*2);
+    ctx.fill();
+    a.x += a.dx;
+    a.y += a.dy;
+    if(a.x<0) a.x=canvas.width;
+    if(a.y<0) a.y=canvas.height;
+    if(a.x>canvas.width) a.x=0;
+    if(a.y>canvas.height) a.y=0;
+  }
+  for (let m of meteors){
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(m.x,m.y);
+    ctx.lineTo(m.x-m.length,m.y+m.length);
+    ctx.stroke();
+    m.x += m.dx;
+    m.y += m.dy;
+  }
+  meteors = meteors.filter(m=> m.x>-50 && m.y<canvas.height+50);
+  if(Math.random()<0.05){
+    meteors.push({
+      x: Math.random()*canvas.width,
+      y: -20,
+      dx: -4,
+      dy: 4,
+      length: 20+Math.random()*20,
+      color: meteorColors[Math.floor(Math.random()*meteorColors.length)]
+    });
+    document.getElementById("meteorSound").play();
+  }
+}
+
+// 顯示過關提示動畫
+function showLevelNotice() {
+  const notice = document.getElementById("levelNotice");
+  notice.style.animation = "levelUpAnim 1s ease forwards";
+  setTimeout(() => { notice.style.animation = ""; }, 1000);
+}
+
+function draw(){
+  drawBackground();
+
+  for(let i=0;i<snake.length;i++){
+    ctx.fillStyle = rainbowColors[i % rainbowColors.length];
+    ctx.fillRect(snake[i].x, snake[i].y, box, box);
+    ctx.strokeStyle = "#111";
+    ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+  }
+
+  if(growing){
+    scaleAnim += 0.02;
+    if(scaleAnim >= 1.2) growing = false;
+  } else {
+    scaleAnim -= 0.02;
+    if(scaleAnim <= 0.8) growing = true;
+  }
+  ctx.save();
+  ctx.translate(food.x + box/2, food.y + box/2);
+  ctx.scale(scaleAnim*1.5, scaleAnim*1.5);
+  ctx.font = `${box}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(currentFoodEmoji(),0,0);
+  ctx.restore();
+
+  let snakeX = snake[0].x;
+  let snakeY = snake[0].y;
+  if(direction==="LEFT") snakeX -= box;
+  if(direction==="UP") snakeY -= box;
+  if(direction==="RIGHT") snakeX += box;
+  if(direction==="DOWN") snakeY += box;
+
+  if(snakeX===food.x && snakeY===food.y){
+    score++;
+    document.getElementById("score").innerText = "分數："+score;
+    document.getElementById("eatSound").play();
+
+    // 下一關
+    foodStage = (foodStage + 1) % foods.length;
+    food = randomFood();
+    document.getElementById("levelUpSound").play();
+    showLevelNotice();
+  } else {
+    snake.pop();
+  }
+
+  let newHead = {x: snakeX, y: snakeY};
+
+  if(snakeX<0 || snakeY<0 || snakeX>=canvas.width || snakeY>=canvas.height || collision(newHead,snake)){
+    clearInterval(game);
+    document.getElementById("gameOverSound").play();
+    alert("遊戲結束！分數："+score);
+  }
+
+  snake.unshift(newHead);
+}
+
+let game;
+function pauseGame(){
+  clearInterval(game);
+  document.getElementById("pauseOverlay").style.display="flex";
+}
+function resumeGame(){
+  document.getElementById("pauseOverlay").style.display="none";
+  game = setInterval(draw,speed);
+}
+
+function startGame(){
+  document.getElementById("startOverlay").style.display="none";
+  resumeGame();
+}
+
+let manualPause = false;
+function togglePause(){
+  if (manualPause) {
+    resumeGame();
+    manualPause = false;
+  } else {
+    pauseGame();
+    manualPause = true;
+  }
+}
+</script>
+</body>
+</html>
