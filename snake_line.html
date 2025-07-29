@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>經典貪食蛇</title>
+<style>
+  body {
+    background: #000;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100vh;
+    font-family: sans-serif;
+    color: #fff;
+  }
+  h1 {
+    margin: 10px 0;
+    font-size: 24px;
+  }
+  canvas {
+    background: #111;
+    border: 2px solid #555;
+    touch-action: none; /* 手機防止滑動 */
+  }
+  #score {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+  #controls {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+    gap: 20px;
+  }
+  .btn {
+    background: #444;
+    border: 1px solid #777;
+    padding: 10px 15px;
+    font-size: 16px;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+  }
+  .btn:active {
+    background: #666;
+  }
+</style>
+</head>
+<body>
+<h1>經典貪食蛇</h1>
+<div id="score">分數：0</div>
+<canvas id="gameCanvas" width="300" height="300"></canvas>
+<div id="controls">
+  <button class="btn" onclick="changeDirection('LEFT')">←</button>
+  <div>
+    <button class="btn" onclick="changeDirection('UP')">↑</button><br>
+    <button class="btn" onclick="changeDirection('DOWN')">↓</button>
+  </div>
+  <button class="btn" onclick="changeDirection('RIGHT')">→</button>
+</div>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const box = 15; // 方塊大小
+let snake = [{ x: 9 * box, y: 10 * box }];
+let direction;
+let score = 0;
+
+// 食物種類（分數門檻對應）
+const foods = [
+  { score: 0, emoji: "🍄" },      // 香菇
+  { score: 11, emoji: "🌽" },     // 烤玉米
+  { score: 21, emoji: "🥪" },     // 土司夾肉片
+  { score: 31, emoji: "🥩" },     // 牛小排
+  { score: 41, emoji: "🦞" }      // 龍蝦
+];
+
+function getFoodEmoji() {
+  let current = foods[0].emoji;
+  for (let i = 0; i < foods.length; i++) {
+    if (score >= foods[i].score) current = foods[i].emoji;
+  }
+  return current;
+}
+
+let food = {
+  x: Math.floor(Math.random() * 20) * box,
+  y: Math.floor(Math.random() * 20) * box
+};
+
+document.addEventListener("keydown", directionControl);
+
+function directionControl(event) {
+  if (event.key === "ArrowLeft" && direction !== "RIGHT") direction = "LEFT";
+  else if (event.key === "ArrowUp" && direction !== "DOWN") direction = "UP";
+  else if (event.key === "ArrowRight" && direction !== "LEFT") direction = "RIGHT";
+  else if (event.key === "ArrowDown" && direction !== "UP") direction = "DOWN";
+}
+
+function changeDirection(dir) {
+  if (dir === "LEFT" && direction !== "RIGHT") direction = "LEFT";
+  else if (dir === "UP" && direction !== "DOWN") direction = "UP";
+  else if (dir === "RIGHT" && direction !== "LEFT") direction = "RIGHT";
+  else if (dir === "DOWN" && direction !== "UP") direction = "DOWN";
+}
+
+function collision(head, array) {
+  for (let i = 0; i < array.length; i++) {
+    if (head.x === array[i].x && head.y === array[i].y) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function draw() {
+  // 背景
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 畫蛇
+  for (let i = 0; i < snake.length; i++) {
+    ctx.fillStyle = i === 0 ? "#0f0" : "#0a0";
+    ctx.fillRect(snake[i].x, snake[i].y, box, box);
+
+    ctx.strokeStyle = "#111";
+    ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+  }
+
+  // 畫食物（用emoji）
+  ctx.font = `${box}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(getFoodEmoji(), food.x + box / 2, food.y + box / 2);
+
+  // 移動
+  let snakeX = snake[0].x;
+  let snakeY = snake[0].y;
+
+  if (direction === "LEFT") snakeX -= box;
+  if (direction === "UP") snakeY -= box;
+  if (direction === "RIGHT") snakeX += box;
+  if (direction === "DOWN") snakeY += box;
+
+  // 吃到食物
+  if (snakeX === food.x && snakeY === food.y) {
+    score++;
+    document.getElementById("score").innerText = "分數：" + score;
+    food = {
+      x: Math.floor(Math.random() * 20) * box,
+      y: Math.floor(Math.random() * 20) * box
+    };
+  } else {
+    snake.pop();
+  }
+
+  // 新頭
+  let newHead = { x: snakeX, y: snakeY };
+
+  // 撞牆或撞自己
+  if (
+    snakeX < 0 ||
+    snakeY < 0 ||
+    snakeX >= canvas.width ||
+    snakeY >= canvas.height ||
+    collision(newHead, snake)
+  ) {
+    clearInterval(game);
+    alert("遊戲結束！你的分數是：" + score);
+  }
+
+  snake.unshift(newHead);
+}
+
+let game = setInterval(draw, 120);
+</script>
+</body>
+</html>
