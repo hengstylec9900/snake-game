@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>橫向貪食蛇</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    color: #fff;
+    font-family: sans-serif;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    margin: 0 auto;
+    background: #111;
+    border: 2px solid #555;
+    touch-action: none;
+  }
+  #score {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    font-size: 20px;
+  }
+  #controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: grid;
+    grid-template-columns: 60px 60px 60px;
+    grid-template-rows: 60px 60px;
+    gap: 10px;
+    justify-items: center;
+  }
+  .btn {
+    background: #444;
+    border: 1px solid #777;
+    border-radius: 8px;
+    font-size: 24px;
+    color: #fff;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn:active { background: #666; }
+
+  #pauseOverlay {
+    position: absolute;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 24px;
+  }
+  #pauseOverlay button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 20px;
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="score">分數：0</div>
+<div id="controls">
+  <div></div>
+  <button class="btn" onclick="changeDirection('UP')">↑</button>
+  <div></div>
+  <button class="btn" onclick="changeDirection('LEFT')">←</button>
+  <button class="btn" onclick="changeDirection('DOWN')">↓</button>
+  <button class="btn" onclick="changeDirection('RIGHT')">→</button>
+</div>
+<div id="pauseOverlay">
+  <div>下一階段食物出現！</div>
+  <button onclick="resumeGame()">繼續</button>
+</div>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const box = 20;
+let snake = [{ x: 5*box, y: 5*box }];
+let direction;
+let score = 0;
+let speed = 150; // 0.8倍速度
+
+const foods = [
+  { score: 0, emoji: "🍄" },
+  { score: 11, emoji: "🌽" },
+  { score: 21, emoji: "🥪" },
+  { score: 31, emoji: "🥩" },
+  { score: 41, emoji: "🦞" }
+];
+
+function getFoodEmoji(){
+  let current = foods[0].emoji;
+  for(let i=0;i<foods.length;i++){
+    if(score >= foods[i].score) current = foods[i].emoji;
+  }
+  return current;
+}
+
+let food = randomFood();
+
+function randomFood(){
+  return {
+    x: Math.floor(Math.random()*(canvas.width/box))*box,
+    y: Math.floor(Math.random()*(canvas.height/box))*box
+  };
+}
+
+document.addEventListener("keydown", e=>{
+  if(e.key==="ArrowLeft" && direction!=="RIGHT") direction="LEFT";
+  else if(e.key==="ArrowUp" && direction!=="DOWN") direction="UP";
+  else if(e.key==="ArrowRight" && direction!=="LEFT") direction="RIGHT";
+  else if(e.key==="ArrowDown" && direction!=="UP") direction="DOWN";
+});
+
+function changeDirection(dir){
+  if(dir==="LEFT" && direction!=="RIGHT") direction="LEFT";
+  else if(dir==="UP" && direction!=="DOWN") direction="UP";
+  else if(dir==="RIGHT" && direction!=="LEFT") direction="RIGHT";
+  else if(dir==="DOWN" && direction!=="UP") direction="DOWN";
+}
+
+function collision(head, array){
+  for(let i=0;i<array.length;i++){
+    if(head.x===array[i].x && head.y===array[i].y) return true;
+  }
+  return false;
+}
+
+let scaleAnim = 1;
+let growing = true;
+
+function draw(){
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  for(let i=0;i<snake.length;i++){
+    ctx.fillStyle = i===0 ? "#0f0" : "#0a0";
+    ctx.fillRect(snake[i].x, snake[i].y, box, box);
+    ctx.strokeStyle = "#111";
+    ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+  }
+
+  if(growing){
+    scaleAnim += 0.02;
+    if(scaleAnim >= 1.2) growing = false;
+  } else {
+    scaleAnim -= 0.02;
+    if(scaleAnim <= 0.8) growing = true;
+  }
+  ctx.save();
+  ctx.translate(food.x + box/2, food.y + box/2);
+  ctx.scale(scaleAnim, scaleAnim);
+  ctx.font = `${box}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(getFoodEmoji(),0,0);
+  ctx.restore();
+
+  let snakeX = snake[0].x;
+  let snakeY = snake[0].y;
+  if(direction==="LEFT") snakeX -= box;
+  if(direction==="UP") snakeY -= box;
+  if(direction==="RIGHT") snakeX += box;
+  if(direction==="DOWN") snakeY += box;
+
+  if(snakeX===food.x && snakeY===food.y){
+    score++;
+    document.getElementById("score").innerText = "分數："+score;
+    food = randomFood();
+    for(let i=foods.length-1;i>=0;i--){
+      if(score === foods[i].score){
+        pauseGame();
+        break;
+      }
+    }
+  } else {
+    snake.pop();
+  }
+
+  let newHead = {x: snakeX, y: snakeY};
+
+  if(snakeX<0 || snakeY<0 || snakeX>=canvas.width || snakeY>=canvas.height || collision(newHead,snake)){
+    clearInterval(game);
+    alert("遊戲結束！分數："+score);
+  }
+
+  snake.unshift(newHead);
+}
+
+let game;
+function pauseGame(){
+  clearInterval(game);
+  document.getElementById("pauseOverlay").style.display="flex";
+}
+function resumeGame(){
+  document.getElementById("pauseOverlay").style.display="none";
+  game = setInterval(draw,speed);
+}
+
+resumeGame();
+</script>
+</body>
+</html>
